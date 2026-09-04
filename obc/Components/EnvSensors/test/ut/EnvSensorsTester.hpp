@@ -1,0 +1,6 @@
+#ifndef OBC_ENVSENSORS_TESTER_FORWARDING_HPP_
+#define OBC_ENVSENSORS_TESTER_FORWARDING_HPP_
+
+#include "Tester.hpp"
+
+#endif

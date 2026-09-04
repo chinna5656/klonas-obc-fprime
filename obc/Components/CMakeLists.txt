@@ -1,3 +1,6 @@
-# Include project-wide components here
-
-# add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/MyComponent")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/NavPredictor")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/ParachuteDeployer")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/EnvSensors")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/PowerMonitor")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/CommsCrypto")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/DataLogger")

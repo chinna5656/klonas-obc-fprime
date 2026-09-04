@@ -14,3 +14,19 @@ build-fprime-*
 /.vscode/
 .DS_Store
 *.gcov
+
+
+
+# FPrime Build Artifacts & Caches
+build-artifacts/
+build-fprime-*/
+
+# Python Virtual Environment
+fprime-venv/
+venv/
+__pycache__/
+*.pyc
+
+# Logs & Runtime Data
+logs/
+DpCat/

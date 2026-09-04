@@ -1,0 +1,7 @@
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/HalBridge")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/UartDriver")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/UsbCdcDriver")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/SpiDriver")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/AdcDriver")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/GpioDriver")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/HardwareTimer")

@@ -1,0 +1,6 @@
+#ifndef OBC_NAVPREDICTOR_TESTER_FORWARDING_HPP_
+#define OBC_NAVPREDICTOR_TESTER_FORWARDING_HPP_
+
+#include "Tester.hpp"
+
+#endif
