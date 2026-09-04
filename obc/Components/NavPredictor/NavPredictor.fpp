@@ -1,14 +1,14 @@
 module Obc {
 
   @ Navigation predictor, descent estimator, and parachute trigger component
-  active component NavPredictor {
+  passive component NavPredictor {
 
     # ----------------------------------------------------------------------
     # General ports
     # ----------------------------------------------------------------------
 
     @ Input port for incoming GPS NMEA stream from UART driver
-    async input port gpsDataIn: Drv.ByteStreamData
+    sync input port gpsDataIn: Drv.ByteStreamData
 
     @ Periodic schedule port for state estimation and criteria checks
     sync input port schedIn: Svc.Sched
@@ -37,17 +37,17 @@ module Obc {
     # ----------------------------------------------------------------------
 
     @ Command to set the automatic parachute deployment altitude threshold (meters MSL)
-    async command NAV_SET_DEPLOY_ALT(
+    sync command NAV_SET_DEPLOY_ALT(
       altThresholdM: F32 @< Parachute deploy threshold altitude in meters
     )
 
     @ Command to arm or disarm automatic parachute deployment
-    async command NAV_ARM_PARACHUTE(
+    sync command NAV_ARM_PARACHUTE(
       arm: Fw.Enabled @< Enable or disable parachute arming
     )
 
     @ Emergency command to force immediate parachute deployment trigger
-    async command NAV_FORCE_DEPLOY()
+    sync command NAV_FORCE_DEPLOY()
 
     # ----------------------------------------------------------------------
     # Telemetry channels

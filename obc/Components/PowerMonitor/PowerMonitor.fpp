@@ -1,7 +1,7 @@
 module Obc {
 
   @ Power monitor, battery SoC estimator, and NE555P WDT strobing component
-  active component PowerMonitor {
+  passive component PowerMonitor {
 
     # ----------------------------------------------------------------------
     # General ports
@@ -34,17 +34,17 @@ module Obc {
     # ----------------------------------------------------------------------
 
     @ Configure low power voltage threshold (Volts)
-    async command PWR_SET_LOW_POWER_THRESH(
+    sync command PWR_SET_LOW_POWER_THRESH(
       threshVolt: F32 @< Battery voltage threshold to enter low power mode
     )
 
     @ Force low power mode override
-    async command PWR_FORCE_LOW_POWER(
+    sync command PWR_FORCE_LOW_POWER(
       enable: Fw.Enabled @< Enable or disable low power mode
     )
 
     @ Calibrate voltage divider ratio (default 2.0 for 100k/100k)
-    async command PWR_CALIBRATE_DIVIDER(
+    sync command PWR_CALIBRATE_DIVIDER(
       dividerRatio: F32 @< Resistor divider attenuation factor
     )
 

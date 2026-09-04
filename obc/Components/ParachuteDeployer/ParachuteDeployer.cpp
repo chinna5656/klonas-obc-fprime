@@ -20,11 +20,8 @@ namespace Obc {
   {
   }
 
-  void ParachuteDeployer::init(
-      FwSizeType queueDepth,
-      FwEnumStoreType instance
-  ) {
-    ParachuteDeployerComponentBase::init(queueDepth, instance);
+  void ParachuteDeployer::init(FwEnumStoreType instance) {
+    ParachuteDeployerComponentBase::init(instance);
   }
 
   void ParachuteDeployer::deployIn_handler(

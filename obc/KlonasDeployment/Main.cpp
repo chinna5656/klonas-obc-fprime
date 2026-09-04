@@ -7,53 +7,106 @@
 #include <obc/KlonasDeployment/Top/KlonasDeploymentTopology.hpp>
 // OSAL initialization
 #include <Os/Os.hpp>
-// Used for signal handling shutdown
-#include <signal.h>
-// Used for command line argument processing
-#include <getopt.h>
-// Used for atoi
-#include <cstdlib>
-// Used for logging to the console
-#include <Fw/Logger/Logger.hpp>
 // Low-level hardware bridge (Heartbeat LED & GPIO)
 #include <obc/Drivers/HalBridge/stm32f4xx_hal_bridge.h>
+// F Prime assert hook
+#include <Fw/Types/Assert.hpp>
 
-/**
- * \brief print command line help message
- *
- * This will print a command line help message including the available command line arguments.
- *
- * @param app: name of application
- */
-void print_usage(const char* app) {
-    Fw::Logger::log("Usage: ./%s [options]\n-a\thostname/IP address\n-p\tport_number\n", app);
-}
+#if !defined(__arm__) && !defined(STM32F411xE)
+// Used for signal handling shutdown (host Linux only)
+#include <signal.h>
+// Used for command line argument processing (host Linux only)
+#include <getopt.h>
+// Used for logging to the console
+#include <Fw/Logger/Logger.hpp>
+#endif
 
-/**
- * \brief shutdown topology cycling on signal
- *
- * The reference topology allows for a simulated cycling of the rate groups. This simulated cycling needs to be stopped
- * in order for the program to shutdown. This is done via handling signals such that it is performed via Ctrl-C
- *
- * @param signum
- */
-static void signalHandler(int signum) {
-    obc::stopRateGroups();
-}
+// Used for atoi
+#include <cstdlib>
+
+#if defined(__arm__) || defined(STM32F411xE)
+// ============================================================
+// Bare-Metal FW_ASSERT Hook
+// Overrides the default assert handler that calls fputs(stderr)
+// which dereferences newlib's _impure_ptr and triggers a BusFault
+// on bare-metal where C library stdio is not initialized.
+// Instead, we hang in a fast LED blink loop identical to HardFault_Handler.
+// ============================================================
+namespace {
+
+class BareMetalAssertHook final : public Fw::AssertHook {
+public:
+    BareMetalAssertHook() = default;
+
+    void reportAssert(
+        FILE_NAME_ARG,
+        FwSizeType,
+        FwSizeType,
+        FwAssertArgType,
+        FwAssertArgType,
+        FwAssertArgType,
+        FwAssertArgType,
+        FwAssertArgType,
+        FwAssertArgType
+    ) override {
+        // No-op: avoid any stdio/fputs/malloc on bare-metal.
+    }
+
+    void doAssert() override {
+        // Ensure GPIOC clock (bit 2 of RCC_AHB1ENR) and toggle PC13 LED rapidly.
+        *(volatile uint32_t*)0x40023830U |= (1U << 2);
+        *(volatile uint32_t*)0x40020800U &= ~(0x03U << 26);
+        *(volatile uint32_t*)0x40020800U |=  (0x01U << 26);
+        while (true) {
+            *(volatile uint32_t*)0x40020814U ^= (1U << 13);
+            for (volatile uint32_t i = 0; i < 50000U; i++) {
+                __asm__ volatile("nop");
+            }
+        }
+    }
+};
+
+} // anonymous namespace
+#endif // __arm__
 
 /**
  * \brief execute the program
- *
- * This F´ program is designed to run in standard environments (e.g. Linux/macOs running on a laptop). Thus it uses
- * command line inputs to specify how to connect.
  *
  * @param argc: argument count supplied to program
  * @param argv: argument values supplied to program
  * @return: 0 on success, something else on failure
  */
 int main(int argc, char* argv[]) {
-    // Immediate hardware indication on PC13 as soon as static constructors finish
+
+#if defined(__arm__) || defined(STM32F411xE)
+    // 1. Immediate hardware indication as soon as static constructors finish.
     BSP_LED_Init();
+
+    // 2. Register bare-metal assert hook BEFORE any F Prime initialization to
+    //    prevent fputs(stderr) -> BusFault from any FW_ASSERT failures.
+    static BareMetalAssertHook s_assertHook;
+    s_assertHook.registerHook();
+
+    // 3. Initialize OS abstractions (stub implementations on bare-metal).
+    Os::init();
+
+    // 4. Setup, cycle, and teardown topology.
+    obc::TopologyState inputs;
+    inputs.hostname = nullptr;
+    inputs.port = 0;
+    obc::setupTopology(inputs);
+    obc::startRateGroups(Fw::TimeInterval(0, 100000)); // 10 Hz base tick (100 ms)
+    obc::teardownTopology(inputs);
+
+    // Should never reach here on bare-metal.
+    while (true) {
+        __asm__ volatile("nop");
+    }
+    return 0;
+
+#else
+    // Host Linux path
+    auto signalHandler = [](int) { obc::stopRateGroups(); };
 
     I32 option = 0;
     CHAR* hostname = nullptr;
@@ -61,41 +114,34 @@ int main(int argc, char* argv[]) {
 
     Os::init();
 
-    // Loop while reading the getopt supplied options
     while ((option = getopt(argc, argv, "hp:a:")) != -1) {
         switch (option) {
-            // Handle the -a argument for address/hostname
             case 'a':
                 hostname = optarg;
                 break;
-            // Handle the -p port number argument
             case 'p':
                 port_number = static_cast<U16>(atoi(optarg));
                 break;
-            // Cascade intended: help output
             case 'h':
-            // Cascade intended: help output
             case '?':
-            // Default case: output help and exit
             default:
-                print_usage(argv[0]);
+                Fw::Logger::log("Usage: ./%s [options]\n-a\thostname/IP address\n-p\tport_number\n", argv[0]);
                 return (option == 'h') ? 0 : 1;
         }
     }
-    // Object for communicating state to the topology
+
     obc::TopologyState inputs;
     inputs.hostname = hostname;
     inputs.port = port_number;
 
-    // Setup program shutdown via Ctrl-C
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
     Fw::Logger::log("Hit Ctrl-C to quit\n");
 
-    // Setup, cycle, and teardown topology
     obc::setupTopology(inputs);
-    obc::startRateGroups(Fw::TimeInterval(0, 100000));  // Program loop cycling rate groups at 10Hz (100ms base tick)
+    obc::startRateGroups(Fw::TimeInterval(0, 100000)); // 10 Hz base tick (100 ms)
     obc::teardownTopology(inputs);
     Fw::Logger::log("Exiting...\n");
     return 0;
+#endif
 }

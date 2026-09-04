@@ -65,6 +65,8 @@ void BSP_LED_On(void);
 void BSP_LED_Off(void);
 void BSP_LED_Toggle(void);
 
+void HalBridge_HardwareInit(void);
+
 /* ----------------------------------------------------------------------
  * STM32 HAL Type Definitions (Native Bridge & Target Abstraction)
  * ---------------------------------------------------------------------- */
@@ -122,10 +124,16 @@ void BSP_LED_Toggle(void);
     } ADC_HandleTypeDef;
 
     /* Peripheral Handles */
+#if defined(__arm__) || defined(STM32F411xE)
+    #define GPIOA ((GPIO_TypeDef*)0x40020000U)
+    #define GPIOB ((GPIO_TypeDef*)0x40020400U)
+    #define GPIOC ((GPIO_TypeDef*)0x40020800U)
+#else
     extern GPIO_TypeDef Mock_GPIOA;
     extern GPIO_TypeDef Mock_GPIOB;
     #define GPIOA (&Mock_GPIOA)
     #define GPIOB (&Mock_GPIOB)
+#endif
 
     extern UART_HandleTypeDef huart1; /* USART1 (LoRa) */
     extern UART_HandleTypeDef huart2; /* USART2 (GPS)  */

@@ -109,14 +109,12 @@ module obc {
       # Rate group 1 (High Rate: 10 Hz)
       rateGroupDriver.CycleOut[Ports_RateGroups.rateGroup1] -> rateGroup1.CycleIn
       rateGroup1.RateGroupMemberOut[0] -> CdhCore.tlmSend.Run
-      rateGroup1.RateGroupMemberOut[1] -> FileHandling.fileDownlink.Run
-      rateGroup1.RateGroupMemberOut[2] -> systemResources.run
-      rateGroup1.RateGroupMemberOut[3] -> ComCcsds.comQueue.run
-      rateGroup1.RateGroupMemberOut[4] -> ComCcsds.aggregator.timeout
-      rateGroup1.RateGroupMemberOut[5] -> envSensors.schedIn
-      rateGroup1.RateGroupMemberOut[6] -> navPredictor.schedIn
-      rateGroup1.RateGroupMemberOut[7] -> parachuteDeployer.schedIn
-      rateGroup1.RateGroupMemberOut[8] -> comDriver.schedIn
+      rateGroup1.RateGroupMemberOut[1] -> ComCcsds.comQueue.run
+      rateGroup1.RateGroupMemberOut[2] -> ComCcsds.aggregator.timeout
+      rateGroup1.RateGroupMemberOut[3] -> envSensors.schedIn
+      rateGroup1.RateGroupMemberOut[4] -> navPredictor.schedIn
+      rateGroup1.RateGroupMemberOut[5] -> parachuteDeployer.schedIn
+      rateGroup1.RateGroupMemberOut[6] -> comDriver.schedIn
 
       # Rate group 2 (Medium Rate: 1 Hz)
       rateGroupDriver.CycleOut[Ports_RateGroups.rateGroup2] -> rateGroup2.CycleIn

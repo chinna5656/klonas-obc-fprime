@@ -40,11 +40,8 @@ namespace Obc {
     memset(m_nmeaBuf, 0, sizeof(m_nmeaBuf));
   }
 
-  void NavPredictor::init(
-      FwSizeType queueDepth,
-      FwEnumStoreType instance
-  ) {
-    NavPredictorComponentBase::init(queueDepth, instance);
+  void NavPredictor::init(FwEnumStoreType instance) {
+    NavPredictorComponentBase::init(instance);
   }
 
   void NavPredictor::gpsDataIn_handler(

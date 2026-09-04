@@ -47,10 +47,7 @@ namespace Obc {
       ~PowerMonitor() override = default;
 
       //! Initialize component
-      void init(
-          FwSizeType queueDepth,
-          FwEnumStoreType instance = 0
-      );
+      void init(FwEnumStoreType instance = 0);
 
     private:
 

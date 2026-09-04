@@ -18,6 +18,7 @@
 #include <obc/Components/EnvSensors/EnvSensors.hpp>
 #include <obc/Components/PowerMonitor/PowerMonitor.hpp>
 #include <obc/Components/DataLogger/DataLogger.hpp>
+#include <obc/Drivers/HalBridge/stm32f4xx_hal_bridge.h>
 
 // Public functions for use in main program are namespaced with deployment module obc
 // This is also the namespace where the topology components are instantiated by FPP.
@@ -35,9 +36,9 @@ Svc::RateGroupDriver::DividerSet rateGroupDivisorsSet{{{1, 0}, {10, 0}, {40, 0}}
 
 // Rate groups may supply a context token to each of the attached children whose purpose is set by the project. The
 // reference topology sets each token to zero as these contexts are unused in this project.
-U32 rateGroup1Context[Svc::ActiveRateGroup::CONNECTION_COUNT_MAX] = {};
-U32 rateGroup2Context[Svc::ActiveRateGroup::CONNECTION_COUNT_MAX] = {};
-U32 rateGroup3Context[Svc::ActiveRateGroup::CONNECTION_COUNT_MAX] = {};
+U32 rateGroup1Context[10] = {};
+U32 rateGroup2Context[10] = {};
+U32 rateGroup3Context[10] = {};
 
 enum TopologyConstants {
     COMM_PRIORITY = 34,
@@ -60,7 +61,7 @@ void configureTopology() {
     rateGroup3.configure(rateGroup3Context, FW_NUM_ARRAY_ELEMENTS(rateGroup3Context));
 
     // Command sequencer needs to allocate memory to hold contents of command sequences
-    cmdSeq.allocateBuffer(0, mallocator, 5 * 1024);
+    cmdSeq.allocateBuffer(0, mallocator, 1024);
 }
 
 void setupTopology(const TopologyState& state) {
@@ -76,13 +77,17 @@ void setupTopology(const TopologyState& state) {
     configComponents(state);
     // Initialize USB CDC ACM Virtual COM Port (/dev/ttyACM0)
     comDriver.configure();
+    // Initialize STM32 hardware peripherals (GPIO, SPI1 bus, BNO08X reset sequence)
+    HalBridge_HardwareInit();
 
     // Project-specific component configuration. Function provided above. May be inlined, if desired.
     configureTopology();
     // Autocoded parameter loading. Function provided by autocoder.
     loadParameters();
-    // Autocoded task kick-off (active components). Function provided by autocoder.
+#ifndef __arm__
+    // Autocoded task kick-off (active components on host Linux).
     startTasks(state);
+#endif
 }
 
 void startRateGroups(const Fw::TimeInterval& interval) {
@@ -96,9 +101,11 @@ void stopRateGroups() {
 }
 
 void teardownTopology(const TopologyState& state) {
+#ifndef __arm__
     // Autocoded (active component) task clean-up. Functions provided by topology autocoder.
     stopTasks(state);
     freeThreads(state);
+#endif
 
     // Resource deallocation
     cmdSeq.deallocateBuffer(mallocator);

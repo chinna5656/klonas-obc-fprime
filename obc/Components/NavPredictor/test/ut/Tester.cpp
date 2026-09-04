@@ -42,11 +42,8 @@ namespace Obc {
     memcpy(m_nmeaBuf, sentence, len);
     m_fprimeBuffer.setSize(len);
 
-    // Invoke async input port (queues into active component message queue)
+    // Invoke sync input port
     this->invoke_to_gpsDataIn(0, m_fprimeBuffer, Drv::ByteStreamStatus::OP_OK);
-
-    // Dispatch message queue item inside component under test
-    this->component.doDispatch();
   }
 
   void NavPredictorTester::sendSchedTick(U32 context) {
@@ -60,7 +57,6 @@ namespace Obc {
   void NavPredictorTester::sendCmdSetDeployAlt(F32 deployAltM, Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_NAV_SET_DEPLOY_ALT(TEST_INSTANCE_ID, 10, deployAltM);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, NavPredictorComponentBase::OPCODE_NAV_SET_DEPLOY_ALT, 10, expectedResponse);
   }
@@ -68,7 +64,6 @@ namespace Obc {
   void NavPredictorTester::sendCmdArmParachute(Fw::Enabled arm, Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_NAV_ARM_PARACHUTE(TEST_INSTANCE_ID, 20, arm);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, NavPredictorComponentBase::OPCODE_NAV_ARM_PARACHUTE, 20, expectedResponse);
   }
@@ -76,7 +71,6 @@ namespace Obc {
   void NavPredictorTester::sendCmdForceDeploy(Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_NAV_FORCE_DEPLOY(TEST_INSTANCE_ID, 30);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, NavPredictorComponentBase::OPCODE_NAV_FORCE_DEPLOY, 30, expectedResponse);
   }

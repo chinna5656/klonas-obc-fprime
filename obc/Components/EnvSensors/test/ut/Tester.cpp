@@ -42,7 +42,6 @@ namespace Obc {
   void EnvSensorsTester::sendCmdInitSensors(Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_ENV_INIT_SENSORS(TEST_INSTANCE_ID, 10);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, EnvSensorsComponentBase::OPCODE_ENV_INIT_SENSORS, 10, expectedResponse);
   }
@@ -50,7 +49,6 @@ namespace Obc {
   void EnvSensorsTester::sendCmdSetSeaLevelPressure(F32 hpa, Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_ENV_SET_SEA_LEVEL_PRESSURE(TEST_INSTANCE_ID, 20, hpa);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, EnvSensorsComponentBase::OPCODE_ENV_SET_SEA_LEVEL_PRESSURE, 20, expectedResponse);
   }

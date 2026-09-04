@@ -18,28 +18,13 @@ module obc {
   # ----------------------------------------------------------------------
 
   module Default {
-    constant QUEUE_SIZE = 10
-    constant STACK_SIZE = 2 * 1024
+    constant QUEUE_SIZE = 2
+    constant STACK_SIZE = 1 * 1024
   }
 
   # ----------------------------------------------------------------------
   # Active component instances
   # ----------------------------------------------------------------------
-
-  instance rateGroup1: Svc.ActiveRateGroup base id 0x10001000 \
-    queue size Default.QUEUE_SIZE \
-    stack size Default.STACK_SIZE \
-    priority 43
-
-  instance rateGroup2: Svc.ActiveRateGroup base id 0x10002000 \
-    queue size Default.QUEUE_SIZE \
-    stack size Default.STACK_SIZE \
-    priority 42
-
-  instance rateGroup3: Svc.ActiveRateGroup base id 0x10003000 \
-    queue size Default.QUEUE_SIZE \
-    stack size Default.STACK_SIZE \
-    priority 41
 
   instance cmdSeq: Svc.CmdSequencer base id 0x10004000 \
     queue size Default.QUEUE_SIZE \
@@ -55,39 +40,28 @@ module obc {
     stack size Default.STACK_SIZE \
     priority 60
 
-  instance navPredictor: Obc.NavPredictor base id 0x0F00 \
-    queue size Default.QUEUE_SIZE \
-    stack size Default.STACK_SIZE \
-    priority 50
-
-  instance parachuteDeployer: Obc.ParachuteDeployer base id 0x1000 \
-    queue size Default.QUEUE_SIZE \
-    stack size Default.STACK_SIZE \
-    priority 50
-
-  instance envSensors: Obc.EnvSensors base id 0x1200 \
-    queue size Default.QUEUE_SIZE \
-    stack size Default.STACK_SIZE \
-    priority 37
-
-  instance powerMonitor: Obc.PowerMonitor base id 0x1300 \
-    queue size Default.QUEUE_SIZE \
-    stack size Default.STACK_SIZE \
-    priority 36
-
   instance dataLogger: Obc.DataLogger base id 0x1400 \
     queue size Default.QUEUE_SIZE \
     stack size Default.STACK_SIZE \
     priority 30
 
   # ----------------------------------------------------------------------
-  # Queued component instances
-  # ----------------------------------------------------------------------
-
-
-  # ----------------------------------------------------------------------
   # Passive component instances
   # ----------------------------------------------------------------------
+
+  instance rateGroup1: Svc.PassiveRateGroup base id 0x10001000
+
+  instance rateGroup2: Svc.PassiveRateGroup base id 0x10002000
+
+  instance rateGroup3: Svc.PassiveRateGroup base id 0x10003000
+
+  instance navPredictor: Obc.NavPredictor base id 0x0F00
+
+  instance parachuteDeployer: Obc.ParachuteDeployer base id 0x1000
+
+  instance envSensors: Obc.EnvSensors base id 0x1200
+
+  instance powerMonitor: Obc.PowerMonitor base id 0x1300
 
   instance chronoTime: Svc.ChronoTime base id 0x10010000
 

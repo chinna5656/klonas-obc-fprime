@@ -92,16 +92,16 @@ Priority allocation follows strict **Rate-Monotonic Scheduling (RMS)** principle
 
 | Instance Name | Component Class | Model | Base ID | Queue Depth | Stack Size | Priority |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `rateGroup1` | `Svc::ActiveRateGroup` | Active | `0x10001000` | 10 | 2 KB | 43 |
-| `rateGroup2` | `Svc::ActiveRateGroup` | Active | `0x10002000` | 10 | 2 KB | 42 |
-| `rateGroup3` | `Svc::ActiveRateGroup` | Active | `0x10003000` | 10 | 2 KB | 41 |
-| `cmdSeq` | `Svc::CmdSequencer` | Active | `0x10004000` | 10 | 2 KB | 40 |
-| `commsCrypto` | `Obc::CommsCrypto` | Active | `0x1100` | 10 | 2 KB | 60 |
-| `navPredictor` | `Obc::NavPredictor` | Active | `0x0F00` | 10 | 2 KB | 50 |
-| `parachuteDeployer` | `Obc::ParachuteDeployer`| Active | `0x1000` | 10 | 2 KB | 50 |
-| `envSensors` | `Obc::EnvSensors` | Active | `0x1200` | 10 | 2 KB | 37 |
-| `powerMonitor` | `Obc::PowerMonitor` | Active | `0x1300` | 10 | 2 KB | 36 |
-| `dataLogger` | `Obc::DataLogger` | Active | `0x1400` | 10 | 2 KB | 30 |
+| `rateGroup1` | `Svc::ActiveRateGroup` | Active | `0x10001000` | 2 | 1 KB | 43 |
+| `rateGroup2` | `Svc::ActiveRateGroup` | Active | `0x10002000` | 2 | 1 KB | 42 |
+| `rateGroup3` | `Svc::ActiveRateGroup` | Active | `0x10003000` | 2 | 1 KB | 41 |
+| `cmdSeq` | `Svc::CmdSequencer` | Active | `0x10004000` | 2 | 1 KB | 40 |
+| `commsCrypto` | `Obc::CommsCrypto` | Active | `0x1100` | 2 | 1 KB | 60 |
+| `dataLogger` | `Obc::DataLogger` | Active | `0x1400` | 2 | 1 KB | 30 |
+| `navPredictor` | `Obc::NavPredictor` | Passive | `0x0F00` | — | — | — |
+| `parachuteDeployer` | `Obc::ParachuteDeployer`| Passive | `0x1000` | — | — | — |
+| `envSensors` | `Obc::EnvSensors` | Passive | `0x1200` | — | — | — |
+| `powerMonitor` | `Obc::PowerMonitor` | Passive | `0x1300` | — | — | — |
 | `chronoTime` | `Svc::ChronoTime` | Passive | `0x10010000` | — | — | — |
 | `rateGroupDriver` | `Svc::RateGroupDriver` | Passive | `0x10011000` | — | — | — |
 | `systemResources` | `Svc::SystemResources` | Passive | `0x10012000` | — | — | — |
@@ -109,7 +109,7 @@ Priority allocation follows strict **Rate-Monotonic Scheduling (RMS)** principle
 | `comDriver` | `Obc::UsbCdcDriver` | Passive | `0x10014000` | — | — | — |
 
 > [!NOTE]
-> On the target STM32F411 bare-metal platform, F Prime OSAL stubs (`Os_Task_Stub`, `Os_Mutex_Stub`) are used. Active component stacks are 2 KB each to comply with the physical 128 KB SRAM limit. The `Os_Generic_PriorityQueue` provides message queue support without dynamic allocation. `comDriver` uses USB CDC ACM (`/dev/ttyACM0`) instead of UART or TCP.
+> On the target STM32F411 bare-metal platform, calculation components (`navPredictor`, `envSensors`, `parachuteDeployer`, `powerMonitor`) execute cooperatively as passive components without internal queues or task stacks. Active component queues are set to depth 2 to optimize SRAM utilization.
 
 ---
 
@@ -374,8 +374,9 @@ For physical bench testing and flight flashing:
 
 | Memory Region | Consumed | Hardware Limit | Free Margin | Usage | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Flash ROM** (`0x08000000`) | **404,632 B** (~395.1 KB) | 524,288 B (512 KB) | **119,656 B** (~116.8 KB) | **77.18%** | **PASS** |
-| **SRAM** (`0x20000000`)  | **104,968 B** (~102.5 KB) | 131,072 B (128 KB) | **26,104 B** (~25.5 KB)   | **80.08%** | **PASS** |
+| **Flash ROM** (`0x08000000`) | **398,508 B** (~389.2 KB) | 524,288 B (512 KB) | **125,780 B** (~122.8 KB) | **76.01%** | **PASS** |
+| **BSS + Data** | **90,020 B** (~87.9 KB) | 131,072 B (128 KB) | **41,052 B** (~40.1 KB) | **68.68%** | **PASS** |
+| **Total SRAM (.bss+.data+stack/heap)** | **102,312 B** (~99.9 KB) | 131,072 B (128 KB) | **28,760 B** (~28.1 KB)   | **78.06%** | **PASS** |
 
 ### 5.5 Bare-Metal Startup Hardening
 The following hardening measures are applied in [`startup_stm32f411.c`](file:///home/jin/F-prime-obc/cmake/platform/stm32f411/Platform/startup_stm32f411.c) to ensure reliable boot on the STM32F411:
@@ -390,6 +391,9 @@ The following hardening measures are applied in [`startup_stm32f411.c`](file:///
 
 3. **Early Boot LED Indicator:**
    - `BSP_LED_Init()` is the first call in `main()`, pulling PC13 LOW (active-low LED ON) to visually confirm that all C++ static constructors completed successfully.
+
+4. **Dedicated Diagnostic HardFault Handler:**
+   - Explicit `HardFault_Handler()` traps hardware faults and enters a high-frequency (100 ms period) toggle loop on PC13 without calling `_malloc_r` or `fprintf`.
 
 ---
 

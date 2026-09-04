@@ -34,10 +34,7 @@ namespace Obc {
       ~EnvSensors() override = default;
 
       //! Initialize component
-      void init(
-          FwSizeType queueDepth,
-          FwEnumStoreType instance = 0
-      );
+      void init(FwEnumStoreType instance = 0);
 
     private:
 
@@ -113,6 +110,11 @@ namespace Obc {
 
       U32 m_spiErrors;
       U32 m_tickCount;
+
+      // Raw Hardware SPI register inspect variables
+      U8 m_rawBmpChipId;
+      U8 m_rawBmeChipId;
+      U8 m_rawBnoHeader[4];
 
   };
 

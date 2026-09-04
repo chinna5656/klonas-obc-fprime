@@ -28,11 +28,8 @@ namespace Obc {
   {
   }
 
-  void PowerMonitor::init(
-      FwSizeType queueDepth,
-      FwEnumStoreType instance
-  ) {
-    PowerMonitorComponentBase::init(queueDepth, instance);
+  void PowerMonitor::init(FwEnumStoreType instance) {
+    PowerMonitorComponentBase::init(instance);
   }
 
   void PowerMonitor::schedIn_handler(

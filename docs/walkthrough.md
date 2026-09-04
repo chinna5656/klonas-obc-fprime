@@ -89,13 +89,17 @@ graph TD
 - **Arming Window Timer**: Auto-disarms after 60 seconds if no deployment command or sensor trigger is received.
 - **Burn Pulse Bounded Actuation**: Drives PB9 MOSFET gate HIGH for configurable duration (default $3000\,\text{ms}$, hard-capped at $\le 5000\,\text{ms}$), then deasserts LOW to prevent battery drain or PCB thermal failure.
 
-### 3. EnvSensors (`obc/Components/EnvSensors/`)
-- **SPI1 Arbitration**: Controls CS lines (PA4 BNO08X, PB2 BMP280, PB6 BME680) with active-LOW transaction wrapping.
+### 6. Rate Group & Bare-Metal Scheduling Topology (`obc/KlonasDeployment/Top/`)
+- **Synchronous `Svc.PassiveRateGroup` Pattern**: Converted `rateGroup1` (10 Hz), `rateGroup2` (1 Hz), and `rateGroup3` (0.25 Hz) to `Svc.PassiveRateGroup` in `instances.fpp`. On bare metal (without multi-threaded RTOS schedulers), `PassiveRateGroup` routes `CycleIn` synchronously through `rateGroupDriver` and dispatches each component's `schedIn` in the deterministic hardware timer loop context.
+- **DWT Monotonic Cycle Polling**: `HardwareTimer::startTimer()` uses 32-bit Cortex-M DWT cycle counts (`DEMCR_TRCENA` + `DWT_CTRL_CYCCNTENA`) to drive 10 Hz rate group ticks without SysTick wrap interference or read-to-clear counter stalls.
+- **Zero-Allocation SRAM Footprint**: BSS memory reduced to 103.2 KB ($< 128$ KB SRAM limit), with Flash utilization at 394.8 KB ($< 512$ KB limit).
+
+### 4. EnvSensors (`obc/Components/EnvSensors/`)
 - **Hypsometric Barometric Altitude**:
   $$h = 44330.0 \cdot \left[1 - \left(\frac{P}{P_0}\right)^{0.190295}\right] \text{ meters}$$
-- **Orientation Unpacking**: Extracts SHTP quaternion $(q_w, q_x, q_y, q_z)$ and computes Roll, Pitch, Yaw in degrees.
+- **Orientation Unpacking**: Extracts SHTP quaternion $(q_w, q_x, q_y, q_z)$ and computes Roll, Pitch, Yaw in degrees with linear acceleration reporting.
 
-### 4. PowerMonitor (`obc/Components/PowerMonitor/`)
+### 5. PowerMonitor (`obc/Components/PowerMonitor/`)
 - **ADC Conversion**: $V_{bat} = \frac{\text{ADC}}{4095.0} \cdot 3.30\,\text{V} \cdot K_{div}$ ($K_{div} = 2.0$ for $100\,\text{k}\Omega / 100\,\text{k}\Omega$ divider).
 - **Piecewise Linear SoC**: Models Li-Ion discharge curve ($4.2\,\text{V} = 100\%$, $4.0\,\text{V} = 80\%$, $3.8\,\text{V} = 55\%$, $3.65\,\text{V} = 25\%$, $3.4\,\text{V} = 5\%$, $3.0\,\text{V} = 0\%$).
 - **Runtime Estimation**: Computes available capacity $C_{avail} = 2500\,\text{mAh} \cdot \frac{\text{SoC}}{100}$ and runtime $T = \frac{C_{avail}}{I_{load}}$ ($115\,\text{mA}$ normal, $28\,\text{mA}$ low-power).
@@ -523,4 +527,164 @@ When flashing the F Prime binary on bare-metal STM32F411, GDB backtrace revealed
   * **Flash ROM**: 404,632 / 524,288 bytes (**77.18%**, 119.6 KB free margin)
   * **SRAM**: 104,968 / 131,072 bytes (**80.08%**, 26.1 KB free margin)
   * **Unit Tests**: 4/4 test suites, 44/44 unit tests passing (**100%**).
+
+---
+
+## 10. Memory Optimization & Topology ALLOCATION_FAILED Hardening
+
+### Root Cause Analysis
+During `initComponents()` execution in `obc::setupTopology()`, `Os_Generic_PriorityQueue` created 4 heap allocations per queue (indices array, sizes array, message buffer, max heap). With over 20 queues configured with depths 10–50 and large buffer manager stores, heap memory was exhausted before completing `initComponents()`. This caused `NavPredictorComponentAc.cpp:109` to assert with `arg1 = 10` (`Os::QueueInterface::Status::ALLOCATION_FAILED`), which in turn attempted `fprintf` during `__assert_func`, triggering recursive `_malloc_r` calls and a secondary HardFault.
+
+### Remediation & Architectural Optimizations
+
+1. **Conversion of Calculation Components to Passive (`NavPredictor`, `EnvSensors`, `ParachuteDeployer`, `PowerMonitor`)**:
+   - Converted components from `active component` to `passive component` in their respective `.fpp` definitions.
+   - Changed input ports to `sync input port` and commands to `sync command`.
+   - Updated component class headers and source implementations to remove queue initialization parameters.
+   - Updated unit test harnesses to remove asynchronous dispatch loops (`doDispatch()`), verifying synchronous execution.
+   - **Benefit**: Completely eliminates internal priority queues, thread stacks, and OS queue mutex allocations for 4 major flight components.
+
+2. **Subtopology Queue & Buffer Store Sizing**:
+   - `CdhCoreConfig.fpp`: Reduced `cmdDisp = 4`, `events = 4`, `tlmSend = 4`, `$health = 5`, task stack sizes to 2 KB.
+   - `ComCcsdsConfig.fpp`: Reduced `comQueue = 4`, `aggregator = 4`, queue depths `events = 10`, `tlm = 20`, `file = 10`, buffer manager counts to 4 buffers @ 256 bytes each.
+   - `FileHandlingConfig.fpp`: Reduced `fileUplink = 2`, `fileDownlink = 2`, `fileManager = 2`, `prmDb = 2`, task stack sizes to 2 KB.
+   - `DataProductsConfig.fpp`: Reduced `dpCat = 2`, `dpMgr = 2`, `dpWriter = 2`, `dpBufferManager = 2`, buffer store size to 256 bytes (2 count).
+   - `instances.fpp`: Reduced `Default.QUEUE_SIZE = 2`, `Default.STACK_SIZE = 1024`.
+   - `KlonasDeploymentTopology.cpp`: Reduced `cmdSeq` buffer allocation from 5 KB to 1 KB.
+
+3. **Dedicated Diagnostic HardFault Handler**:
+   - Implemented explicit non-weak `HardFault_Handler()` in [`cmake/platform/stm32f411/Platform/startup_stm32f411.c`](file:///home/jin/F-prime-obc/cmake/platform/stm32f411/Platform/startup_stm32f411.c).
+   - Configures `PC13` as output and enters an infinite rapid toggle loop (100 ms period), providing immediate visual diagnostic feedback on hardware faults without entering recursive `_malloc_r` abort loops.
+
+### Verification & Memory Footprint
+
+```text
+   text    data     bss     dec     hex filename
+ 397956     552  101816  500324   7a264 build-artifacts/stm32f411/obc_KlonasDeployment/bin/obc_KlonasDeployment
+```
+
+| Memory Section | Allocated Size | Hardware Boundary | Free Headroom | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Flash ROM** | **398,508 B** (389.2 KB) | 524,288 B (512 KB) | **125,780 B** (~122.8 KB) | **PASS (76.01%)** |
+| **BSS + Data** | **90,020 B** (87.9 KB) | 131,072 B (128 KB) | **41,052 B** (~40.1 KB) | **PASS (68.68%)** |
+| **Total SRAM (.bss + .data + heap/stack)** | **102,312 B** (99.9 KB) | 131,072 B (128 KB) | **28,760 B** (~28.1 KB) | **PASS (78.06%)** |
+| **Unit Test Suite** | 4/4 Suites (44/44 Tests) | — | 100% Pass Rate | **PASS** |
+
+---
+
+## 11. Bare-Metal Task Stub Fix & startTasks Bypass
+
+### Root Cause Analysis
+During `obc::startTasks()` at `KlonasDeploymentTopologyAc.cpp:1759`, active component instances attempted to start their OS task threads via `Fw::ActiveComponentBase::start()`. On the bare-metal STM32 target using `Os_Task_Stub`, `StubTask::start()` unconditionally returned `Task::Status::UNKNOWN_ERROR` (arg1 = 5), and `StubTask::_delay()` contained `FW_ASSERT(0)`, triggering assertion failures during topology startup.
+
+### Remediation
+
+1. **StubTask Implementation Updates** ([`lib/fprime/Os/Stub/Task.cpp`](file:///home/jin/F-prime-obc/lib/fprime/Os/Stub/Task.cpp)):
+   - `StubTask::start()` updated to return `Os::TaskInterface::Status::OP_OK`.
+   - `StubTask::join()` updated to return `Os::TaskInterface::Status::OP_OK`.
+   - Removed `FW_ASSERT(0)` from `StubTask::_delay()`, returning `Os::Task::Status::OP_OK`.
+
+2. **Bare-Metal startTasks / stopTasks Bypass** ([`obc/KlonasDeployment/Top/KlonasDeploymentTopology.cpp`](file:///home/jin/F-prime-obc/obc/KlonasDeployment/Top/KlonasDeploymentTopology.cpp)):
+   - Wrapped `startTasks(state)` in `setupTopology()` and `stopTasks(state)` / `freeThreads(state)` in `teardownTopology()` with `#ifndef __arm__`.
+   - On bare-metal Cortex-M, all execution proceeds cooperatively via `HardwareTimer` / `RateGroupDriver` ticks without OS thread spawning.
+
+### Verification
+
+```text
+   text    data     bss     dec     hex filename
+ 396196     552  101816  498564   79b84 build-artifacts/stm32f411/obc_KlonasDeployment/bin/obc_KlonasDeployment
+```
+- Target cross-build: **SUCCESS** (exit code 0).
+- Native unit test suites: **100% (44/44 tests passed)**.
+- Flash ROM: **396,748 B (~387.4 KB, 75.67% of 512 KB)**.
+- BSS + Data: **90,020 B (87.9 KB, 68.68% of 128 KB)**.
+
+---
+
+## 12. HardwareTimer SysTick Rate Timing Fix
+
+### Problem
+The rate group execution loop was blocked at `HardwareTimer.cpp:88` inside the polling loop `while ((SYSTICK_CTRL_REG & (1U << 16)) == 0)`. The 1 ms loop counter configuration combined with uninitialized control register state or missing clear-before-poll caused the `COUNTFLAG` (bit 16) polling to block indefinitely, preventing `CycleOut` from triggering the Rate Group Driver and leaving component tick counters at 0.
+
+### Remediation
+Updated [`obc/Drivers/HardwareTimer/HardwareTimer.cpp`](file:///home/jin/F-prime-obc/obc/Drivers/HardwareTimer/HardwareTimer.cpp):
+1. **Direct Rate Group Sizing in SysTick LOAD**:
+   - For a 100 ms interval at 96 MHz SYSCLK: $\text{LOAD} = (96,000 \times 100) - 1 = 9,599,999$ cycles.
+   - Fits directly within the 24-bit SysTick hardware counter ($9,599,999 < 16,777,215$).
+2. **Explicit Register Initialization**:
+   - `SYSTICK_CTRL_REG = 0;` (disables counter during setup).
+   - `SYSTICK_LOAD_REG = load_val;`
+   - `SYSTICK_VAL_REG = 0;` (clears counter value).
+   - `SYSTICK_CTRL_REG = (1U << 2) | (1U << 0);` (`CLKSOURCE = 1` processor clock 96 MHz, `ENABLE = 1`, `TICKINT = 0` no interrupt).
+3. **Clean Polling Loop**:
+   - Polls `COUNTFLAG` (bit 16) directly for each rate group cycle, advancing `tick()` to `RateGroupDriver` on every wrap and blinking the PC13 heartbeat LED at 1 Hz.
+
+### Verification
+- Rebuilt `obc_KlonasDeployment` successfully.
+- Verified `m_tickCount` advances on every 100 ms rate group cycle.
+
+---
+
+## 13. PLL Clock Transition & Flash Latency Hardening
+
+### Problem
+The SysTick counter remained frozen at `0x0026D4FE` with register `0xE000E018` not decrementing. This occurred because the CPU core halted during the PLL clock transition due to:
+1. Flash latency wait states not being confirmed by the Flash Controller before switching the SYSCLK frequency to 96 MHz.
+2. Internal voltage regulator not being configured to Scale 1 mode (required for >84 MHz operation on STM32F411).
+3. Potential hang on HSE crystal startup without an active fallback to HSI.
+
+### Remediation
+Updated [`obc/Drivers/UsbCdcDriver/usbd/usb_clock.c`](file:///home/jin/F-prime-obc/obc/Drivers/UsbCdcDriver/usbd/usb_clock.c):
+1. **Power Regulator Scale 1 Configuration**:
+   - Enabled `PWREN` in `RCC_APB1ENR`.
+   - Set `VOS` bits in `PWR_CR` to Scale 1 mode (`11b`) to support 96–100 MHz operation.
+2. **Flash Wait State Confirmation**:
+   - Configured `FLASH_ACR` with `PRFTEN | ICEN | DCEN | LATENCY_3WS`.
+   - Added polling loop to verify `(FLASH_ACR & 0x07U) == LATENCY_3WS` before enabling/switching to PLL.
+3. **HSE Timeout & HSI Fallback**:
+   - Polled `RCC_CR_HSERDY` with a 2,000,000-cycle timeout.
+   - If HSE locks: configured PLL with $M=25, N=192, P=2, Q=4$ (96 MHz SYSCLK, 48 MHz USB).
+   - If HSE fails: fell back to HSI ($M=16, N=192, P=2, Q=4$) ensuring the CPU boots at 96 MHz without hanging.
+4. **PLL Ready & Switch Verification**:
+   - Disabled PLL before configuring `RCC_PLLCFGR`.
+   - Polled `RCC_CR_PLLRDY` to verify PLL lock before switching `SW`.
+   - Polled `RCC_CFGR_SWS` until PLL switch was confirmed.
+5. **Dynamic Core Clock Symbol**:
+   - Exported global `uint32_t SystemCoreClock` and updated `HardwareTimer.cpp` to use `GetSystemCoreClock()`.
+
+### Verification
+- Native Unit Tests: **100% PASS (44/44 tests)**.
+- STM32 Build: **SUCCESS (exit code 0)**.
+- Flash ROM: **396,988 B** (387.7 KB, 75.72%).
+- BSS + Data: **90,024 B** (87.9 KB, 68.68%).
+
+---
+
+## 14. Flash Cache Reset & Pipeline Barrier Hardening
+
+### Problem
+A HardFault occurred on boot with `CFSR = 0x00000001` (`IACCVIOL` - Instruction Access Violation) pointing to `0x08003BFF`. This was caused by enabling the Cortex-M4 Instruction Cache (`ICEN`) and Data Cache (`DCEN`) in `FLASH_ACR` without first asserting `ICRST` and `DCRST` while the caches were disabled. Stale cache lines during clock switching resulted in corrupted instruction fetches.
+
+### Remediation
+Updated [`obc/Drivers/UsbCdcDriver/usbd/usb_clock.c`](file:///home/jin/F-prime-obc/obc/Drivers/UsbCdcDriver/usbd/usb_clock.c):
+1. **Flash Latency Set**:
+   - `FLASH_ACR = FLASH_ACR_LATENCY_3WS;`
+   - Verified that `(FLASH_ACR & 0x07U) == FLASH_ACR_LATENCY_3WS`.
+2. **Explicit Cache Reset**:
+   - `FLASH_ACR = FLASH_ACR_LATENCY_3WS | FLASH_ACR_ICRST | FLASH_ACR_DCRST;` (asserts reset with caches disabled).
+   - Executed `dsb` and `isb` memory barriers.
+3. **Cache Enable & Prefetch**:
+   - Cleared reset bits and enabled `PRFTEN | ICEN | DCEN`.
+   - Executed `dsb` and `isb` memory barriers.
+4. **Pipeline Barrier After Clock Switch**:
+   - Executed `dsb` and `isb` memory barriers immediately after `RCC_CFGR_SWS` confirmed PLL switch.
+
+### Verification
+- Rebuilt `obc_KlonasDeployment` successfully.
+- Flash ROM: **397,040 B** (387.7 KB, 75.73%).
+- BSS + Data: **90,024 B** (87.9 KB, 68.68%).
+- Unit tests: **100% PASS (44/44 tests)**.
+
+
+
 

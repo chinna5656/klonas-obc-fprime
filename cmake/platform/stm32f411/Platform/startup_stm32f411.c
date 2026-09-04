@@ -74,9 +74,28 @@ void Default_Handler(void) {
     while (1);
 }
 
+/* ----------------------------------------------------------------------------
+ * Dedicated HardFault Handler
+ * Traps hardware faults and rapid-toggles PC13 diagnostic LED
+ * ---------------------------------------------------------------------------- */
+void HardFault_Handler(void) {
+    /* 1. Ensure GPIOC clock is enabled (AHB1ENR bit 2) */
+    *(volatile uint32_t*)0x40023830U |= (1U << 2);
+    /* 2. Configure PC13 as output (MODER[27:26] = 01) */
+    *(volatile uint32_t*)0x40020800U &= ~(0x03U << 26);
+    *(volatile uint32_t*)0x40020800U |=  (0x01U << 26);
+
+    /* 3. Diagnostic rapid blink loop (prevents recursive fault in _malloc_r) */
+    while (1) {
+        *(volatile uint32_t*)0x40020814U ^= (1U << 13);
+        for (volatile uint32_t i = 0; i < 200000; i++) {
+            __asm__ volatile("nop");
+        }
+    }
+}
+
 void Reset_Handler(void);
 void NMI_Handler(void) __attribute__((weak, alias("Default_Handler")));
-void HardFault_Handler(void) __attribute__((weak, alias("Default_Handler")));
 void MemManage_Handler(void) __attribute__((weak, alias("Default_Handler")));
 void BusFault_Handler(void) __attribute__((weak, alias("Default_Handler")));
 void UsageFault_Handler(void) __attribute__((weak, alias("Default_Handler")));
@@ -112,6 +131,11 @@ void Reset_Handler(void) {
     while (dst < &_ebss) {
         *dst++ = 0;
     }
+
+    /* Enable FPU (Coprocessor CP10 & CP11 Full Access) on Cortex-M4F */
+    *(volatile uint32_t*)0xE000ED88U |= ((3UL << (10 * 2)) | (3UL << (11 * 2)));
+    __asm__ volatile("dsb");
+    __asm__ volatile("isb");
 
     // Call static constructors
     extern void __libc_init_array(void);

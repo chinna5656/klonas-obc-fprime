@@ -107,10 +107,11 @@ ctest --test-dir build-fprime-automatic-native-ut --output-on-failure
 
 ## Memory Budget (Latest Build)
 
-| Region | Used | Limit | Usage |
-| :--- | :--- | :--- | :--- |
-| **Flash** | 404,632 B (395 KB) | 524,288 B (512 KB) | **77.2%** |
-| **SRAM** | 104,968 B (103 KB) | 131,072 B (128 KB) | **80.1%** |
+| Region | Used | Limit | Usage | Margin |
+| :--- | :--- | :--- | :--- | :--- |
+| **Flash ROM** | **398,508 B** (389.2 KB) | 524,288 B (512 KB) | **76.0%** | **122.8 KB free** |
+| **BSS + Data** | **90,020 B** (87.9 KB) | 131,072 B (128 KB) | **68.7%** | **41.1 KB free** |
+| **Total SRAM (Allocated)** | **102,312 B** (99.9 KB) | 131,072 B (128 KB) | **78.1%** | **28.1 KB free** |
 
 ## Project Structure
 

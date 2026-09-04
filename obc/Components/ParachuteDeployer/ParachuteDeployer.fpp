@@ -1,14 +1,14 @@
 module Obc {
 
   @ Parachute deployment safety controller and thermal burn-wire driver
-  active component ParachuteDeployer {
+  passive component ParachuteDeployer {
 
     # ----------------------------------------------------------------------
     # General ports
     # ----------------------------------------------------------------------
 
-    @ Async input trigger from NavPredictor
-    async input port deployIn: Obc.DeployTrigger
+    @ Sync input trigger from NavPredictor
+    sync input port deployIn: Obc.DeployTrigger
 
     @ Periodic tick to service burn countdown and arming timeout
     sync input port schedIn: Svc.Sched
@@ -34,20 +34,20 @@ module Obc {
     # ----------------------------------------------------------------------
 
     @ Arm the parachute deployer using the 32-bit security key
-    async command PARACHUTE_ARM(
+    sync command PARACHUTE_ARM(
       key: U32 @< Security passcode (e.g. 0xDEADBEEF)
     )
 
     @ Disarm the parachute deployer and enforce safety interlock
-    async command PARACHUTE_DISARM()
+    sync command PARACHUTE_DISARM()
 
     @ Command immediate manual deployment using security passcode
-    async command PARACHUTE_DEPLOY(
+    sync command PARACHUTE_DEPLOY(
       key: U32 @< Security passcode
     )
 
     @ Configure thermal burn pulse duration in milliseconds
-    async command PARACHUTE_SET_BURN_TIME(
+    sync command PARACHUTE_SET_BURN_TIME(
       burnDurationMs: U32 @< Burn duration in milliseconds (bounded <= 5000ms)
     )
 

@@ -1,7 +1,7 @@
 module Obc {
 
   @ Environmental and Attitude Multi-Sensor orchestrator on shared SPI1 bus
-  active component EnvSensors {
+  passive component EnvSensors {
 
     # ----------------------------------------------------------------------
     # General ports
@@ -40,10 +40,10 @@ module Obc {
     # ----------------------------------------------------------------------
 
     @ Re-initialize all sensors on the SPI1 bus
-    async command ENV_INIT_SENSORS()
+    sync command ENV_INIT_SENSORS()
 
     @ Set baseline sea-level atmospheric pressure for altitude calculations
-    async command ENV_SET_SEA_LEVEL_PRESSURE(
+    sync command ENV_SET_SEA_LEVEL_PRESSURE(
       seaLevelHpa: F32 @< Reference standard pressure in hPa (default 1013.25)
     )
 

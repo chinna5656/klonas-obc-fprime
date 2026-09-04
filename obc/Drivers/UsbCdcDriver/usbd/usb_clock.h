@@ -19,6 +19,8 @@
 extern "C" {
 #endif
 
+extern uint32_t SystemCoreClock;
+
 /**
  * Configure STM32F411 PLL clock tree from 25 MHz HSE crystal:
  * - PLL_M = 25  (VCO In = 1.0 MHz)

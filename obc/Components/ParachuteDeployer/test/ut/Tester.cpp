@@ -35,7 +35,6 @@ namespace Obc {
 
   void ParachuteDeployerTester::sendDeployTrigger(U32 confidence, bool force) {
     this->invoke_to_deployIn(0, confidence, force);
-    this->component.doDispatch();
   }
 
   void ParachuteDeployerTester::sendSchedTick(U32 context) {
@@ -45,7 +44,6 @@ namespace Obc {
   void ParachuteDeployerTester::sendCmdArm(U32 key, Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_PARACHUTE_ARM(TEST_INSTANCE_ID, 10, key);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, ParachuteDeployerComponentBase::OPCODE_PARACHUTE_ARM, 10, expectedResponse);
   }
@@ -53,7 +51,6 @@ namespace Obc {
   void ParachuteDeployerTester::sendCmdDisarm(Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_PARACHUTE_DISARM(TEST_INSTANCE_ID, 20);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, ParachuteDeployerComponentBase::OPCODE_PARACHUTE_DISARM, 20, expectedResponse);
   }
@@ -61,7 +58,6 @@ namespace Obc {
   void ParachuteDeployerTester::sendCmdDeploy(U32 key, Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_PARACHUTE_DEPLOY(TEST_INSTANCE_ID, 30, key);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, ParachuteDeployerComponentBase::OPCODE_PARACHUTE_DEPLOY, 30, expectedResponse);
   }
@@ -69,7 +65,6 @@ namespace Obc {
   void ParachuteDeployerTester::sendCmdSetBurnTime(U32 burnMs, Fw::CmdResponse expectedResponse) {
     this->cmdResponseHistory->clear();
     this->sendCmd_PARACHUTE_SET_BURN_TIME(TEST_INSTANCE_ID, 40, burnMs);
-    this->component.doDispatch();
     ASSERT_CMD_RESPONSE_SIZE(1);
     ASSERT_CMD_RESPONSE(0, ParachuteDeployerComponentBase::OPCODE_PARACHUTE_SET_BURN_TIME, 40, expectedResponse);
   }
