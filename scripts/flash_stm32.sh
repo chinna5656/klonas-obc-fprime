@@ -65,5 +65,7 @@ fi
 
 echo "===================================================================="
 echo " FLASH SUCCESSFUL: Target MCU is running KLONAS Phase-1 Flight SW"
-echo " GDS Serial Interface: USART1 (PA9=TX, PA10=RX) @ 115200 bps"
+echo " Heartbeat: PC13 LED ON (solid) -> 1 Hz blink when rate groups start"
+echo " GDS Interface: USB CDC ACM (/dev/ttyACM0) via onboard USB-C"
+echo " Connect GDS: fprime-gds -n --comm-adapter uart --uart-device /dev/ttyACM0 --uart-baud 115200"
 echo "===================================================================="

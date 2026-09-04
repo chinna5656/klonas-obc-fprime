@@ -1,9 +1,10 @@
 # KLONAS Phase-1 CubeSat Flight Software Design Document (SDD)
 **Document Identifier:** KLONAS-FSW-SDD-001  
-**Revision:** 1.0.0  
+**Revision:** 2.0.0  
 **Classification:** NASA F Prime Engineering Handover  
-**Target Hardware:** STM32F411CEU6 (Black Pill) ARM Cortex-M4 @ 100 MHz  
-**Operating System:** FreeRTOS (CMSIS-OS v2) / F Prime OSAL  
+**Target Hardware:** STM32F411CEU6 (Black Pill) ARM Cortex-M4F @ 96 MHz (HSE 25 MHz, PLL M=25 N=192 P=2 Q=4)  
+**Operating System:** Bare-Metal (F Prime OSAL Stubs: Os_Task_Stub, Os_Mutex_Stub, Os_Generic_PriorityQueue)  
+**GDS Interface:** USB CDC ACM Virtual COM Port (`/dev/ttyACM0`) via onboard USB Type-C  
 **Framework:** NASA F Prime (F') Core Framework  
 
 ---
@@ -12,7 +13,7 @@
 
 ### 1.1 Mission Context
 The **KLONAS Phase-1** CubeSat mission represents a technology demonstration flight designed to validate an autonomous high-altitude descent prediction and parachute recovery system, integrated with an ultra-compact, low-power NASA F Prime (F') flight software architecture. The avionics stack is built around an **STM32F411CEU6 (Black Pill)** microcontroller, executing real-time estimation, logging, encrypted telemetry dispatch, and pyrotechnic/thermal parachute actuation within severe SWaP (Size, Weight, and Power) constraints:
-* **Processing:** Single-core ARM Cortex-M4 with Single-Precision Hardware FPU @ 100 MHz.
+* **Processing:** Single-core ARM Cortex-M4F with Single-Precision Hardware FPU @ 96 MHz.
 * **Storage / Memory:** 512 KB Flash, 128 KB SRAM.
 * **Allocation Discipline:** **Strict static memory allocation**. Zero dynamic allocation (`malloc`, `calloc`, `new`, `delete`) after initialization.
 * **Deterministic Execution:** Rate-monotonic cyclic scheduling governed by F Prime `ActiveRateGroup` and `RateGroupDriver` primitives.
@@ -39,8 +40,8 @@ The flight software adopts NASA's **Component-Port-Topology** architectural mode
 |                                  KLONAS-1 FLIGHT SOFTWARE TOPOLOGY                                 |
 |                                                                                                   |
 |  +----------------------+      10 Hz Tick       +-----------------------------------------------+ |
-|  |   Svc.LinuxTimer /   |---------------------->|             Svc.RateGroupDriver               | |
-|  |  FreeRTOS TimersTick |                       +-----------------------------------------------+ |
+|  |  Obc.HardwareTimer   |--------------------->|             Svc.RateGroupDriver               | |
+|  | (SysTick @ 96 MHz)   |                       +-----------------------------------------------+ |
 |  +----------------------+                               | (Div: 1)         | (Div: 10)  | (Div: 40)
 |                                                         v                  v            v         |
 |                                                    RateGroup1         RateGroup2   RateGroup3     |
@@ -79,7 +80,9 @@ The flight software adopts NASA's **Component-Port-Topology** architectural mode
 |                                  |                                              | SPI2 MicroSD  | |
 |                                  v                                              +---------------+ |
 |                      +-----------------------+                                                    |
-|                      |   LoRa Radio Modem    |                                                    |
+|                      |  Obc.UsbCdcDriver     |                                                    |
+|                      |  (USB CDC /dev/ttyACM0|                                                    |
+|                      |   via PA11/PA12)      |                                                    |
 |                      +-----------------------+                                                    |
 +---------------------------------------------------------------------------------------------------+
 ```
@@ -89,24 +92,24 @@ Priority allocation follows strict **Rate-Monotonic Scheduling (RMS)** principle
 
 | Instance Name | Component Class | Model | Base ID | Queue Depth | Stack Size | Priority |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `rateGroup1` | `Svc::ActiveRateGroup` | Active | `0x10001000` | 10 | 64 KB | 43 |
-| `rateGroup2` | `Svc::ActiveRateGroup` | Active | `0x10002000` | 10 | 64 KB | 42 |
-| `rateGroup3` | `Svc::ActiveRateGroup` | Active | `0x10003000` | 10 | 64 KB | 41 |
-| `cmdSeq` | `Svc::CmdSequencer` | Active | `0x10004000` | 10 | 64 KB | 40 |
-| `commsCrypto` | `Obc::CommsCrypto` | Active | `0x1100` | 10 | 64 KB | 39 |
-| `navPredictor` | `Obc::NavPredictor` | Active | `0x0F00` | 10 | 64 KB | 38 |
-| `envSensors` | `Obc::EnvSensors` | Active | `0x1200` | 10 | 64 KB | 37 |
-| `powerMonitor` | `Obc::PowerMonitor` | Active | `0x1300` | 10 | 64 KB | 36 |
-| `cmdDisp` | `Svc::CommandDispatcher`| Active | `0x01000000` | 10 | 64 KB | 35 |
-| `comDriver` | `Drv::TcpClient` | Active | `0x10014000` | - | 64 KB | 34 |
-| `dataLogger` | `Obc::DataLogger` | Active | `0x1400` | 10 | 64 KB | 30 |
-| `health` | `Svc::Health` | Active | `0x01002000` | 25 | 64 KB | 24 |
-| `events` | `Svc::EventManager` | Active | `0x01001000` | 10 | 64 KB | 23 |
-| `tlmSend` | `Svc::TlmChan` | Active | `0x01006000` | 10 | 64 KB | 22 |
-| `parachuteDeployer` | `Obc::ParachuteDeployer`| Queued | `0x1000` | 10 | Synchronous | Caller |
+| `rateGroup1` | `Svc::ActiveRateGroup` | Active | `0x10001000` | 10 | 2 KB | 43 |
+| `rateGroup2` | `Svc::ActiveRateGroup` | Active | `0x10002000` | 10 | 2 KB | 42 |
+| `rateGroup3` | `Svc::ActiveRateGroup` | Active | `0x10003000` | 10 | 2 KB | 41 |
+| `cmdSeq` | `Svc::CmdSequencer` | Active | `0x10004000` | 10 | 2 KB | 40 |
+| `commsCrypto` | `Obc::CommsCrypto` | Active | `0x1100` | 10 | 2 KB | 60 |
+| `navPredictor` | `Obc::NavPredictor` | Active | `0x0F00` | 10 | 2 KB | 50 |
+| `parachuteDeployer` | `Obc::ParachuteDeployer`| Active | `0x1000` | 10 | 2 KB | 50 |
+| `envSensors` | `Obc::EnvSensors` | Active | `0x1200` | 10 | 2 KB | 37 |
+| `powerMonitor` | `Obc::PowerMonitor` | Active | `0x1300` | 10 | 2 KB | 36 |
+| `dataLogger` | `Obc::DataLogger` | Active | `0x1400` | 10 | 2 KB | 30 |
+| `chronoTime` | `Svc::ChronoTime` | Passive | `0x10010000` | — | — | — |
+| `rateGroupDriver` | `Svc::RateGroupDriver` | Passive | `0x10011000` | — | — | — |
+| `systemResources` | `Svc::SystemResources` | Passive | `0x10012000` | — | — | — |
+| `timer` | `Obc::HardwareTimer` | Passive | `0x10013000` | — | — | — |
+| `comDriver` | `Obc::UsbCdcDriver` | Passive | `0x10014000` | — | — | — |
 
 > [!NOTE]
-> On the target STM32F411 embedded microcontroller, active task stack sizes are scaled down to 2 KB to 4 KB per thread to comply with the physical 128 KB SRAM limit. The 64 KB allocation above reflects the host simulation environment configuration.
+> On the target STM32F411 bare-metal platform, F Prime OSAL stubs (`Os_Task_Stub`, `Os_Mutex_Stub`) are used. Active component stacks are 2 KB each to comply with the physical 128 KB SRAM limit. The `Os_Generic_PriorityQueue` provides message queue support without dynamic allocation. `comDriver` uses USB CDC ACM (`/dev/ttyACM0`) instead of UART or TCP.
 
 ---
 
@@ -319,9 +322,11 @@ All custom components feature 100% deterministic, host-compiled unit test suites
 
 | Test Suite Target | Test Cases | Execution Time | Pass Rate | Leaks Detected |
 | :--- | :--- | :--- | :--- | :--- |
-| `obc_Components_NavPredictor_ut_exe` | 11 | 0.05 s | **100% (11/11)** | 0 bytes |
-| `obc_Components_CommsCrypto_ut_exe` | 11 | 0.03 s | **100% (11/11)** | 0 bytes |
-| **Combined Project UT Suite** | **22** | **0.40 s** | **100% (22/22)**| **0 bytes** |
+| `obc_Components_NavPredictor_ut_exe` | 11 | 0.03 s | **100% (11/11)** | 0 bytes |
+| `obc_Components_ParachuteDeployer_ut_exe` | 11 | 0.05 s | **100% (11/11)** | 0 bytes |
+| `obc_Components_CommsCrypto_ut_exe` | 11 | 0.04 s | **100% (11/11)** | 0 bytes |
+| `obc_Components_EnvSensors_ut_exe` | 11 | 0.04 s | **100% (11/11)** | 0 bytes |
+| **Combined Project UT Suite** | **44** | **0.70 s** | **100% (44/44)**| **0 bytes** |
 
 ```bash
 # Execute entire project unit test suite
@@ -343,24 +348,48 @@ The `KlonasDeployment` target compiles into a native Linux binary communicating 
 
 ### 5.3 Hardware-in-the-Loop (HIL) Execution on STM32 Black Pill
 For physical bench testing and flight flashing:
-1. **Cross-Compilation:** Switch CMake toolchain to `arm-none-eabi-gcc` with FreeRTOS OSAL bindings:
+1. **Cross-Compilation:** Switch CMake toolchain to `arm-none-eabi-gcc` with bare-metal OSAL stubs:
    ```bash
    fprime-util generate stm32f411
    fprime-util build stm32f411
    ```
-2. **Hardware Flashing:** Deploy binary via OpenOCD / ST-Link v2:
+2. **Binary Extraction:**
    ```bash
-   openocd -f interface/stlink.cfg -f target/stm32f4x.cfg \
-           -c "program build-artifacts/stm32f411/obc_KlonasDeployment.bin 0x08000000 verify reset exit"
+   arm-none-eabi-objcopy -O binary \
+     build-artifacts/stm32f411/obc_KlonasDeployment/bin/obc_KlonasDeployment \
+     build-artifacts/stm32f411/obc_KlonasDeployment/bin/obc_KlonasDeployment.bin
    ```
-3. **GDS Bridge Connection:** Run `fprime-gds` using the UART serial communication adapter over ST-Link VCP (`/dev/ttyACM0` @ 115200 baud):
+3. **Hardware Flashing via ST-Link V2:**
    ```bash
-   fprime-gds --no-app \
-              --dictionary build-artifacts/stm32f411/dict/KlonasDeploymentTopologyDictionary.json \
-              --communication-selection uart \
-              --uart-device /dev/ttyACM0 \
-              --uart-baud 115200
+   st-flash --reset write \
+     build-artifacts/stm32f411/obc_KlonasDeployment/bin/obc_KlonasDeployment.bin 0x08000000
    ```
+4. **GDS Connection via USB CDC (`/dev/ttyACM0`):** The onboard USB Type-C connector enumerates as a CDC ACM Virtual COM Port:
+   ```bash
+   fprime-gds -n --comm-adapter uart --uart-device /dev/ttyACM0 --uart-baud 115200 \
+     --dictionary build-artifacts/stm32f411/obc_KlonasDeployment/dict/KlonasDeploymentTopologyDictionary.json
+   ```
+
+### 5.4 Memory Footprint Budget (Latest Build)
+
+| Memory Region | Consumed | Hardware Limit | Free Margin | Usage | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Flash ROM** (`0x08000000`) | **404,632 B** (~395.1 KB) | 524,288 B (512 KB) | **119,656 B** (~116.8 KB) | **77.18%** | **PASS** |
+| **SRAM** (`0x20000000`)  | **104,968 B** (~102.5 KB) | 131,072 B (128 KB) | **26,104 B** (~25.5 KB)   | **80.08%** | **PASS** |
+
+### 5.5 Bare-Metal Startup Hardening
+The following hardening measures are applied in [`startup_stm32f411.c`](file:///home/jin/F-prime-obc/cmake/platform/stm32f411/Platform/startup_stm32f411.c) to ensure reliable boot on the STM32F411:
+
+1. **C++ Destructor Registration Bypass:**
+   - `-fno-use-cxa-atexit` compiler flag prevents GCC from emitting `__cxa_atexit` calls.
+   - Empty stubs for `__cxa_atexit`, `__aeabi_atexit`, and `atexit` prevent Newlib's `__register_exitproc` from performing dynamic allocations during `__libc_init_array()`.
+
+2. **Robust `_sbrk()` Implementation:**
+   - Provides heap bounds checking against linker symbols `_ebss` and `_estack`, and the current stack pointer.
+   - Returns `ENOMEM` on overflow instead of corrupting the stack.
+
+3. **Early Boot LED Indicator:**
+   - `BSP_LED_Init()` is the first call in `main()`, pulling PC13 LOW (active-low LED ON) to visually confirm that all C++ static constructors completed successfully.
 
 ---
 
@@ -368,6 +397,6 @@ For physical bench testing and flight flashing:
 
 | Role | Name | Title | Date |
 | :--- | :--- | :--- | :--- |
-| **Lead FSW Architect** | Antigravity AI Systems | Lead Flight Software Systems Architect | 2026-09-02 |
-| **Mission Lead** | KLONAS Systems Engineering | Principal Investigator | 2026-09-02 |
-| **Software Quality** | NASA F Prime Verification | Flight Software Quality Assurance | 2026-09-02 |
+| **Lead FSW Architect** | Antigravity AI Systems | Lead Flight Software Systems Architect | 2026-09-04 |
+| **Mission Lead** | KLONAS Systems Engineering | Principal Investigator | 2026-09-04 |
+| **Software Quality** | NASA F Prime Verification | Flight Software Quality Assurance | 2026-09-04 |
